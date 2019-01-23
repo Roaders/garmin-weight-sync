@@ -1,26 +1,18 @@
 
-function onHeaders( request: chrome.webRequest.WebRequestHeadersDetails ){
-    console.log(`onHeaders: ${request.requestHeaders}`);
+import { Axios } from "axios-observable";
 
-    const headers = request.requestHeaders;
+console.log(`make request`);
 
-    if(headers){
-        headers.forEach(header => {
-            console.log(`header: ${header.name}: ${header.value}`);
-        })
-    }
+const requestUrl = "https://connect.garmin.com/modern/proxy/weight-service/weight/dateRange?startDate=2000-01-01&endDate=2019-01-23";
+
+interface IDateWeight{
+    calendarDate: string;
+    weight: number;
 }
 
-const filter: chrome.webRequest.RequestFilter = {
-    urls: [
-        "https://connect.garmin.com/*"
-    ]
+interface IWeightResponse{
+    dateWeightList: IDateWeight[];
 }
 
-console.log(`Add listener`);
-
-chrome.webRequest.onSendHeaders.addListener(
-    onHeaders, 
-    filter,
-    ["requestHeaders"] 
-    );
+Axios.get<IWeightResponse>(requestUrl)
+    .subscribe(result => console.log(`result: ${result.data.dateWeightList.map(record => record.weight).join(", ")}`));

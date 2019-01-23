@@ -9,7 +9,6 @@
         "persistent": true
     },
     "permissions": [
-        "webRequest",
         "*://connect.garmin.com/"
     ]
 }

@@ -29,5 +29,8 @@
         "webpack-cli": "^3.2.1"
     },
     "dependencies": {
+        "axios": "^0.18.0",
+        "axios-observable": "^1.0.7",
+        "rxjs": "^6.3.3"
     }
 }
