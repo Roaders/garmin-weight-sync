@@ -1,0 +1,11 @@
+{
+    "manifest_version": 2,
+    "version": "1.0.0",
+    "name": "Garmin Weight Sync",
+    "short_name": "GarminSync",
+    "description": "A chrome extension to synchronise weight data to or from Garmin Connect",
+    "background": {
+        "scripts": ["./dist/background.bundle.js"],
+        "persistent": true
+    }
+}
