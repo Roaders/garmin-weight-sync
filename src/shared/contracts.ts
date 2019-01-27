@@ -6,6 +6,15 @@ export interface IWeightRecord{
     date: Date;
 }
 
+export interface IUserRecord<T>{
+    displayName: string;
+    userId: string;
+    source: T
+}
+
 export interface IWeightProvider{
-    getWeightRecords: (user: string) => Observable<IWeightRecord>;
+
+    getUser: () => Observable<IUserRecord<any>>;
+
+    getWeightRecords: (user: IUserRecord<any>) => Observable<IWeightRecord>;
 }
