@@ -1,6 +1,6 @@
 {
     "manifest_version": 2,
-    "version": "1.0.0",
+    "version": "1.0.1",
     "name": "Garmin Weight Sync",
     "short_name": "GarminSync",
     "description": "A chrome extension to synchronise weight data to or from Garmin Connect",
@@ -9,6 +9,7 @@
         "persistent": true
     },
     "permissions": [
-        "*://connect.garmin.com/"
+        "*://connect.garmin.com/",
+        "storage"
     ]
 }

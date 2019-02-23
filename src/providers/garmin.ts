@@ -1,6 +1,7 @@
 import { IWeightProvider, IWeightRecord, IUserRecord } from "../shared/contracts";
-import { Observable, from as observableFrom, defer } from "rxjs";
-import { map, mergeMap, tap, filter } from "rxjs/operators";
+import { chromeStorageLocalSet, chromeStorageLocalGet } from "../shared/services";
+import { Observable, from as observableFrom, defer, from } from "rxjs";
+import { map, mergeMap, tap, filter, share, bufferTime, scan } from "rxjs/operators";
 import { Axios } from "axios-observable";
 import { String } from "typescript-string-operations";
 import { isInterface, mapToSample } from "../shared/helpers";
@@ -15,9 +16,15 @@ const indexUrl = "https://connect.garmin.com/modern/";
 const jsonRegexp = /(\w+) *= *JSON.parse *\(("[^)]+")\)/gm;
 
 interface IDateWeight{
-    calendarDate: string;
-    weight: number;
-    date: number;
+    calendarDate: string; // "2019-02-07"
+    weight: number; // g
+    date: number; // ms since epoch
+    sourceType: string // "INDEX_SCALE"
+    bmi: number;
+    bodyWater: number; // percentage
+    bodyFat: number; // percentage
+    boneMass: number; // g
+    muscleMass: number; // g
 }
 
 interface IWeightResponse{
@@ -65,7 +72,14 @@ interface ISocialProfile{
     userProfileFullName: string;
 }
 
+interface IGarminStorage{
+    user: IUserRecord<ISocialProfile>;
+    dateWeightList: IDateWeight[];
+}
+
 export class GarminProvider implements IWeightProvider{
+
+    public readonly storageKey = "garmin-weight-record-storage";
 
     public getUser(): Observable<IUserRecord<ISocialProfile>>{
 
@@ -78,30 +92,72 @@ export class GarminProvider implements IWeightProvider{
             filter(profiles => profiles.length > 0),
             map(profiles => profiles[0]),
             map(mapToSocialProfile),
-            tap(profile => console.log(`profile: ${JSON.stringify(profile, undefined, 4)}`)),
             map(mapToUserRecord)
         );
     }
 
     public getWeightRecords( user: IUserRecord<ISocialProfile> ): Observable<IWeightRecord>{
         return defer(() => {
-            console.log(`Garmin getWeightRecords: '${user.displayName}'`);
+            const storageKey = `${this.storageKey}_${user.userId}`;
+
+            console.log(`Garmin getWeightRecords: '${user.displayName}' (${user.source.displayName})`);
 
             const start = Date.now();
 
-            return Axios.get<IProfileResponse>(String.Format(profileUrl, user.source.displayName)).pipe(
-                map(response => new Date(Date.parse(response.data.userInfo.birthDate))),
-                mergeMap(birthDate => observableFrom(getYears(birthDate))),
+            const recordsFromStorageStream = chromeStorageLocalGet<IGarminStorage>(storageKey).pipe(
+                tap(data => data == null ? console.log(`no records from storage`) : console.log(`items ${data.dateWeightList.length} loaded from storage for user ${data.user.displayName}`))
+            );
+
+
+            const dateWeightStream = this.getUserYears(user).pipe(
                 mergeMap(year => Axios.get<IWeightResponse>(String.Format(requestUrl, `${year}-01-01`, `${year}-12-31`)), 4),
                 mergeMap(response => observableFrom(response.data.dateWeightList)),
+                share(),
+            );
+
+            dateWeightStream.pipe(
+                bufferTime(100),
+                filter(items => items.length > 0),
+                scan<IDateWeight[], IDateWeight[]>((acc, value) => {acc.push(...value); return acc;}, []), // TODO: sort by date
+                map(dateWeightList => ({user, dateWeightList})),
+                mergeMap(dateWeightList => chromeStorageLocalSet(storageKey, dateWeightList)),
+            )
+            .subscribe(
+                data => console.log(`Date Weight Records saved: ${data.dateWeightList.length}`),
+                undefined,
+                () => console.log(`storage complete`)
+            );
+
+            return dateWeightStream.pipe(
                 map(mapDateWeight),
                 tap(undefined, undefined, () => {
                     const finished = Date.now();
                     const elapsed = finished - start;
                     console.log(`Garmin records loaded in ${elapsed}ms`);
-                })
-            )
+                }),
+            );
         });
+    }
+
+    private loadLatestUserRecords(existingRecords: IDateWeight[]){
+        const latestRecord = new Date(existingRecords.reduce((acc, record) => Math.max(acc, record.date), 0));
+        const today = new Date();
+
+        return Axios.get<IWeightResponse>(String.Format(requestUrl, `${year}-01-01`, `${year}-12-31`))
+    }
+
+    private loadAllUserRecords( user: IUserRecord<ISocialProfile> ){
+        return this.getUserYears(user).pipe(
+            mergeMap(year => Axios.get<IWeightResponse>(String.Format(requestUrl, `${year}-01-01`, `${year}-12-31`)), 4),
+            mergeMap(response => observableFrom(response.data.dateWeightList)),
+        );
+    }
+
+    private getUserYears( user: IUserRecord<ISocialProfile> ){
+        return Axios.get<IProfileResponse>(String.Format(profileUrl, user.source.displayName)).pipe(
+            map(response => new Date(Date.parse(response.data.userInfo.birthDate))),
+            mergeMap(birthDate => observableFrom(getYears(birthDate))),
+        );
     }
 }
 

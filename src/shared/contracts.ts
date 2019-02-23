@@ -14,6 +14,8 @@ export interface IUserRecord<T>{
 
 export interface IWeightProvider{
 
+    readonly storageKey: string;
+
     getUser: () => Observable<IUserRecord<any>>;
 
     getWeightRecords: (user: IUserRecord<any>) => Observable<IWeightRecord>;
